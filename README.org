@@ -1,0 +1,13 @@
+#+title: mudfish
+
+ #+begin_quote
+Live in the world like a mudfish. The fish lives in the mud, but its skin is always bright and shiny.
+
+—শ্রী রামকৃষ্ণ পরমহংস
+ #+end_quote
+
+mudfish is a sanitizing HTTP proxy which provides strong security and privacy guarantees for any browser using it.
+
+In addition to ad-blocking, it will add mandatory taint analysis every line of Javascript before passing it along to the client ensuring that no tainted data ever leaves the system. All Javascript is downloaded and preprocessed. You are be protected from fingerprinting, exfiltration, and other classes of vulnerabilities even when using outdated browsers. Preprocessing of multimedia files to detect crafted files may also be added in the future, though it is not possible for mudfish to protect against all memory corruption attacks from binary sources.
+
+mudfish provides greater security with better browser performance and less website breakage than extension-based mechanisms can provide.
