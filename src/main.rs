@@ -1,3 +1,6 @@
+use byte_unit::Byte;
+use moka::sync::Cache;
+use rouille;
 use rmp_serde;
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -102,27 +105,32 @@ struct Args {
     port: u16,
 
     /// Directory with Adblock-format filter lists
-    filters: Option<PathBuf>
+    filters: Option<PathBuf>,
+
+    /// Maximum size of the cache
+    #[arg(default_value = "10 MiB")]
+    cache_size: Byte,
 }
 
 fn load_filters(filters: PathBuf) -> FilterSet {
     let mut filter_set = FilterSet::new(false);
     // Prefer to panic rather than skip some requested filters:
     fs::read_dir(filters)
-	.expect("failed to open filter directory {filters}")
+	.unwrap_or_else(|_| panic!("failed to open filter directory {}", filters.display()))
 	.map(Result::unwrap)
 	.map(|entry| entry.path())
-	.flat_map(|path| BufReader::new(File::open(path).expect("failed to open filter list {path}"))
+	.flat_map(|path| BufReader::new(File::open(path)
+					.unwrap_or_else(|err| panic!("failed to open filter list", err)))
 		  .lines()
-		  .map(|filter| filter.expect("failed to read filter list {path}")))
+		  .map(|filter| filter.unwrap_or_else(|_| panic!("failed to read filter list {}", path.display()))))
 	.for_each(|filter| filter_set.add_filter(&filter, ParseOptions::default())
-		  .expect("failed to parse filter {filter}"));
+		  .unwrap_or_else(|_| panic!("failed to parse filter {}", filter)));
     return filter_set;
 }
 
 fn engine_internals(engine: &Engine) -> DeserializeFormat {
-    let serialized = engine.serialize_raw().expect("");
-    return rmp_serde::from_read(&serialized[5..]).expect("");
+    let serialized = engine.serialize_raw().unwrap_or_else(|_| panic!(""));
+    return rmp_serde::from_read(&serialized[5..]).unwrap_or_else(|_| panic!(""));
 }
 
 fn main() {
@@ -134,4 +142,20 @@ fn main() {
     }
 
     println!("Hello, world!");
+
+    let cache = Cache::builder()
+        .weigher(|_key: &str, value: &String| value.len().try_into().unwrap_or(u32::MAX))
+        .max_capacity(args.cache_size.as_u64())
+        .build();
+
+    let port = args.port;
+    rouille::start_server(format!("localhost:{port}"), move |request| {
+	rouille::proxy::full_proxy(
+            request,
+            rouille::proxy::ProxyConfig {
+                addr: "example.com:80",
+                replace_host: Some("example.com".into()),
+            },
+        ).unwrap()
+    });
 }
