@@ -24,7 +24,7 @@ struct Args {
     filters: PathBuf
 }
 
-fn load_filters(filters: &PathBuf) -> FilterSet {
+fn load_filters(filters: PathBuf) -> FilterSet {
     let mut filter_set = FilterSet::new(false);
     // Prefer to panic rather than skip some requested filters:
     fs::read_dir(filters)
@@ -42,7 +42,7 @@ fn load_filters(filters: &PathBuf) -> FilterSet {
 fn main() {
     let args = Args::parse();
 
-    Engine::from_filter_set(load_filters(&args.filters), true);
+    Engine::from_filter_set(load_filters(args.filters), true);
 
     println!("Hello, world!");
 }
