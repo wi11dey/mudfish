@@ -1,0 +1,8 @@
+[package]
+name = "mudfish"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+adblock = "0.8.11"
+swc = "0.282.1"
