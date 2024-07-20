@@ -6,4 +6,5 @@ edition = "2021"
 [dependencies]
 adblock = "0.8.11"
 clap = { version = "4.5.9", features = ["derive", "env"] }
+selectors = "0.25.0"
 swc = "0.282.1"
