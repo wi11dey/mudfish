@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::option::Option;
 use std::fs::{
     self,
     File
@@ -21,7 +22,7 @@ struct Args {
     port: u16,
 
     /// Directory with Adblock-format filter lists
-    filters: PathBuf
+    filters: Option<PathBuf>
 }
 
 fn load_filters(filters: PathBuf) -> FilterSet {
@@ -42,7 +43,9 @@ fn load_filters(filters: PathBuf) -> FilterSet {
 fn main() {
     let args = Args::parse();
 
-    Engine::from_filter_set(load_filters(args.filters), true);
+    if let Some(filters) = args.filters {
+	Engine::from_filter_set(load_filters(filters), true);
+    }
 
     println!("Hello, world!");
 }
