@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-adblock = "0.8.11"
+adblock = { version = "0.8.11", default-features = false, features = ["embedded-domain-resolver", "full-regex-handling"] }
 byte-unit = "5.1.4"
 clap = { version = "4.5.9", features = ["derive", "env"] }
 moka = { version = "0.12.8", features = ["sync"] }

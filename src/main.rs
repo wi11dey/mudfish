@@ -166,7 +166,7 @@ fn to_adblock_request(req: &rouille::Request) -> Result<adblock::request::Reques
 fn main() {
     let args = Args::parse();
 
-    let engine = args.filters
+    let adblock = args.filters
 	.map(|filters| Engine::from_filter_set(load_filters(&filters).unwrap(), true));
 
     println!("Hello, world!");
@@ -176,13 +176,16 @@ fn main() {
         .max_capacity(args.cache_size.as_u64())
         .build();
 
-    rouille::start_server(format!("localhost:{}", args.port), move |request| {
+    rouille::start_server(format!("localhost:{}", args.port), move |req| {
+	if let Some(engine) = &adblock {
+	    engine.check_network_request(&to_adblock_request(req).unwrap());
+	}
 	rouille::proxy::full_proxy(
-            request,
-            rouille::proxy::ProxyConfig {
+	    req,
+	    rouille::proxy::ProxyConfig {
                 addr: "example.com:80",
                 replace_host: Some("example.com".into()),
-            },
+	    },
         ).unwrap()
     });
 }
