@@ -1,16 +1,20 @@
 use byte_unit::Byte;
 use moka::sync::Cache;
+use std::error::Error;
 use rouille;
 use rmp_serde;
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::path::{
+    Path,
+    PathBuf
+};
 use std::option::Option;
 use std::fs::{
     self,
     File
 };
+use std::result::Result;
 use std::io::{
-    Result,
     BufRead,
     BufReader
 };
@@ -112,44 +116,46 @@ struct Args {
     cache_size: Byte,
 }
 
-fn load_filters(filters: PathBuf) -> FilterSet {
+fn load_filters(filters: &Path) -> Result<FilterSet, String> {
     let mut filter_set = FilterSet::new(false);
-    // Prefer to panic rather than skip some requested filters:
-    fs::read_dir(filters)
-	.unwrap_or_else(|_| panic!("failed to open filter directory {}", filters.display()))
-	.map(Result::unwrap)
-	.map(|entry| entry.path())
-	.flat_map(|path| BufReader::new(File::open(path)
-					.unwrap_or_else(|err| panic!("failed to open filter list", err)))
-		  .lines()
-		  .map(|filter| filter.unwrap_or_else(|_| panic!("failed to read filter list {}", path.display()))))
-	.for_each(|filter| filter_set.add_filter(&filter, ParseOptions::default())
-		  .unwrap_or_else(|_| panic!("failed to parse filter {}", filter)));
-    return filter_set;
+    for entry in fs::read_dir(filters)
+	.map_err(|err| format!(r#"failed to open filter directory "{}": {err}"#, filters.display()))?
+    {
+	let path = entry
+	    .map_err(|err| format!(r#"failed to read filter directory "{}": {err}"#, filters.display()))?
+	    .path();
+	for line in BufReader::new(
+	    File::open(&path)
+		.map_err(|err| format!(r#"failed to open filter file "{}": {err}"#, path.display()))?
+	).lines()
+	{
+	    let filter = line
+		.map_err(|err| format!(r#"failed to read filter file "{}": {err}"#, path.display()))?;
+	    filter_set.add_filter(&filter, ParseOptions::default())
+		.map_err(|err| format!(r#"failed to parse filter "{filter}": {err}"#))?;
+	}
+    }
+    return Ok(filter_set);
 }
 
 fn engine_internals(engine: &Engine) -> DeserializeFormat {
-    let serialized = engine.serialize_raw().unwrap_or_else(|_| panic!(""));
-    return rmp_serde::from_read(&serialized[5..]).unwrap_or_else(|_| panic!(""));
+    return rmp_serde::from_read(&engine.serialize_raw().unwrap()[5..]).unwrap();
 }
 
 fn main() {
     let args = Args::parse();
 
-    if let Some(filters) = args.filters {
-	let engine = Engine::from_filter_set(load_filters(filters), true);
-	engine_internals(&engine);
-    }
+    let engine = args.filters
+	.map(|filters| Engine::from_filter_set(load_filters(&filters).unwrap(), true));
 
     println!("Hello, world!");
 
     let cache = Cache::builder()
-        .weigher(|_key: &str, value: &String| value.len().try_into().unwrap_or(u32::MAX))
+        .weigher(|_key: &String, value: &String| value.len().try_into().unwrap_or(u32::MAX))
         .max_capacity(args.cache_size.as_u64())
         .build();
 
-    let port = args.port;
-    rouille::start_server(format!("localhost:{port}"), move |request| {
+    rouille::start_server(format!("localhost:{}", args.port), move |request| {
 	rouille::proxy::full_proxy(
             request,
             rouille::proxy::ProxyConfig {
