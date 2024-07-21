@@ -13,4 +13,5 @@ rouille = "3.6.2"
 selectors = "0.25.0"
 serde = { version = "1.0.204", features = ["derive"] }
 serde_json = "1.0.120"
-swc = "0.282.1"
+swc = "0.282.2"
+thiserror = "1.0.63"

@@ -1,6 +1,6 @@
+use thiserror::Error;
 use byte_unit::Byte;
 use moka::sync::Cache;
-use std::error::Error;
 use rouille;
 use rmp_serde;
 use serde::Deserialize;
@@ -20,6 +20,7 @@ use std::io::{
 };
 use clap::Parser;
 use adblock::{
+    self,
     Engine,
     lists::{FilterSet, ParseOptions},
 };
@@ -121,16 +122,16 @@ fn load_filters(filters: &Path) -> Result<FilterSet, String> {
     for entry in fs::read_dir(filters)
 	.map_err(|err| format!(r#"failed to open filter directory "{}": {err}"#, filters.display()))?
     {
-	let path = entry
+	let file = entry
 	    .map_err(|err| format!(r#"failed to read filter directory "{}": {err}"#, filters.display()))?
 	    .path();
 	for line in BufReader::new(
-	    File::open(&path)
-		.map_err(|err| format!(r#"failed to open filter file "{}": {err}"#, path.display()))?
+	    File::open(&file)
+		.map_err(|err| format!(r#"failed to open filter file "{}": {err}"#, file.display()))?
 	).lines()
 	{
 	    let filter = line
-		.map_err(|err| format!(r#"failed to read filter file "{}": {err}"#, path.display()))?;
+		.map_err(|err| format!(r#"failed to read filter file "{}": {err}"#, file.display()))?;
 	    filter_set.add_filter(&filter, ParseOptions::default())
 		.map_err(|err| format!(r#"failed to parse filter "{filter}": {err}"#))?;
 	}
@@ -140,6 +141,26 @@ fn load_filters(filters: &Path) -> Result<FilterSet, String> {
 
 fn engine_internals(engine: &Engine) -> DeserializeFormat {
     return rmp_serde::from_read(&engine.serialize_raw().unwrap()[5..]).unwrap();
+}
+
+#[derive(Error, Debug)]
+enum RequestError<'a> {
+    #[error("failed to parse request")]
+    ParseError(#[from] adblock::request::RequestError),
+    #[error(r#"{method} request to "{url}" has no referer"#)]
+    NoReferer { method: &'a str, url: &'a str },
+}
+
+fn to_adblock_request(req: &rouille::Request) -> Result<adblock::request::Request, RequestError> {
+    return Ok(adblock::request::Request::new(
+	req.raw_url(),
+	req.header("Referer")
+	    .ok_or(RequestError::NoReferer {
+		method: req.method(),
+		url: req.raw_url()
+	    })?,
+	req.method()
+    )?);
 }
 
 fn main() {
