@@ -1,3 +1,7 @@
+use std::net::{
+    SocketAddr,
+    ipv6::LOCALHOST
+};
 use thiserror::Error;
 use byte_unit::Byte;
 use moka::sync::Cache;
@@ -188,4 +192,44 @@ fn main() {
 	    },
         ).unwrap()
     });
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = Args::parse();
+
+    let adblock = args.filters
+	.map(|filters| Engine::from_filter_set(load_filters(&filters).unwrap(), true));
+
+    let cache_size = args.cache_size.as_u64();
+    let cache = if cache_size > 0 {
+	Some(Cache::builder()
+             .weigher(|_key: &String, value: &String| value.len().try_into().unwrap_or(u32::MAX))
+             .max_capacity(args.cache_size.as_u64())
+             .build())
+    } else {
+	None
+    }
+
+    let addr = SocketAddr::new(LOCALHOST, args.port);
+
+    let listener = TcpListener::bind(addr).await?;
+    println!("listening on http://{}", addr);
+
+    loop {
+        let (stream, _) = listener.accept().await?;
+        let io = TokioIo::new(stream);
+
+        tokio::task::spawn(async move {
+            if let Err(err) = http1::Builder::new()
+                .preserve_header_case(true)
+                .title_case_headers(true)
+                .serve_connection(io, service_fn(proxy))
+                .with_upgrades()
+                .await
+            {
+                println!("failed to serve connection: {:?}", err);
+            }
+        });
+    }
 }
