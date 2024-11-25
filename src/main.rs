@@ -33,6 +33,7 @@ use std::collections::{
     HashSet,
 };
 use std::vec::Vec;
+use tokio::net::{TcpListener, TcpStream};
 
 type Hash = u64;
 type NetworkFilterMask = u32;
@@ -212,7 +213,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let addr = SocketAddr::new(LOCALHOST, args.port);
-
     let listener = TcpListener::bind(addr).await?;
     println!("listening on http://{}", addr);
 
@@ -228,7 +228,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .with_upgrades()
                 .await
             {
-                println!("failed to serve connection: {:?}", err);
+                println!("failed to serve connection: {}", err);
             }
         });
     }
